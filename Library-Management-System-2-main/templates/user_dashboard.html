@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+
+{% block title %}My Library - Library Management System{% endblock %}
+
+{% block content %}
+<div class="panel">
+    <h2>Welcome, {{ current_user.name }}</h2>
+    <p class="text-muted">View your borrowed books, check due dates, and explore the library catalog.</p>
+
+    <div class="grid-3" style="margin-top: 1.5rem;">
+        <div class="stats-card">
+            <div class="stats-info">
+                <h3>{{ borrows|selectattr('status', 'equalto', 'borrowed')|list|length }}</h3>
+                <p>Currently Reading</p>
+            </div>
+        </div>
+        <div class="stats-card">
+            <div class="stats-info">
+                <h3>{{ borrows|selectattr('status', 'equalto', 'returned')|list|length }}</h3>
+                <p>Books Returned</p>
+            </div>
+        </div>
+        <div class="stats-card"
+            style="border-color: {% if total_fine > 0 %}var(--danger){% else %}var(--border-color){% endif %};">
+            <div class="stats-info">
+                <h3 style="color: {% if total_fine > 0 %}var(--danger){% else %}var(--primary){% endif %};">₹{{
+                    total_fine }}</h3>
+                <p>Pending Fines</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="grid-2">
+    <!-- User's Borrows -->
+    <div class="panel">
+        <h3>My Issued Books</h3>
+        <div style="margin-top: 1rem;">
+            {% set active_borrows = borrows|selectattr('status', 'equalto', 'borrowed')|list %}
+            {% if active_borrows %}
+            {% for b in active_borrows %}
+            <div
+                style="background: var(--bg-light); padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem; border: 1px solid {% if b.fine_amount > 0 %}var(--danger){% else %}var(--border-color){% endif %}; transition: transform 0.2s;">
+                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
+                    <h4 style="margin: 0;">{{ b.book.title }}</h4>
+                    <span class="badge {% if b.fine_amount > 0 %}badge-warning{% else %}badge-success{% endif %}"
+                        style="font-size: 0.75rem;">
+                        {% if b.fine_amount > 0 %}Overdue{% else %}Active{% endif %}
+                    </span>
+                </div>
+                <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 0.25rem;">Author: {{ b.book.author
+                    }}</p>
+                <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 0.25rem;">Issued: {{
+                    b.borrow_date.strftime('%d %b %Y') }}</p>
+                <p
+                    style="font-size: 0.9rem; color: {% if b.fine_amount > 0 %}var(--danger){% else %}var(--success){% endif %}; font-weight: 500;">
+                    Due Date: {{ b.due_date.strftime('%d %b %Y') }}
+                </p>
+                {% if b.fine_amount > 0 %}
+                <div
+                    style="margin-top: 1rem; padding-top: 0.5rem; border-top: 1px dashed var(--danger); display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 0.9rem; color: var(--danger); font-weight: bold;">Current Fine:</span>
+                    <span style="font-size: 1.1rem; color: var(--danger); font-weight: 800;">₹{{ b.fine_amount }}</span>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+            {% else %}
+            <p class="text-muted">You have no active book assignments. Browse the catalog and request a book!</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Browse Catalog -->
+    <div class="panel">
+        <h3>Library Catalog</h3>
+        <form method="GET" action="{{ url_for('user_dashboard') }}"
+            style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem;">
+            <input type="text" name="search" class="form-control" placeholder="Search by title or author..."
+                value="{{ search }}">
+            <button type="submit" class="btn btn-primary">Search</button>
+        </form>
+
+        <div style="max-height: 500px; overflow-y: auto; padding-right: 0.5rem;">
+            {% for book in books %}
+            <div style="padding: 1rem; border-bottom: 1px solid var(--border-color);">
+                <div
+                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                    <strong style="color: var(--primary);">{{ book.title }}</strong>
+                    <span class="badge badge-primary">{{ book.category }}</span>
+                </div>
+                <p style="font-size: 0.85rem; color: var(--text-muted);">By {{ book.author }}</p>
+                <p
+                    style="font-size: 0.85rem; margin-top: 0.5rem; {% if book.available_copies > 0 %}color: var(--success);{% else %}color: var(--danger);{% endif %}">
+                    Status: {% if book.available_copies > 0 %} Available ({{ book.available_copies }} left) {% else %}
+                    All copies issued {% endif %}
+                </p>
+                {% if book.available_copies > 0 %}
+                <form method="POST" action="{{ url_for('request_book', book_id=book.id) }}"
+                    style="margin-top: 0.75rem; display: flex; gap: 0.5rem; align-items: center;">
+                    <input type="number" name="days" value="14" min="1" max="60" class="form-control"
+                        style="width: 80px; padding: 0.3rem 0.5rem; font-size: 0.85rem;" title="Borrow days">
+                    <span style="font-size: 0.8rem; color: var(--text-muted);">days</span>
+                    <button type="submit" class="btn btn-success" style="padding: 0.3rem 0.75rem; font-size: 0.8rem;">📚
+                        Request Book</button>
+                </form>
+                {% else %}
+                <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 5px;">(Not available right now)</p>
+                {% endif %}
+            </div>
+            {% else %}
+            <p class="text-muted">No books found in the catalog.</p>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- My Book Requests Section -->
+<div class="panel">
+    <h3>My Book Requests</h3>
+    <p class="text-muted" style="margin-bottom: 1rem;">Track the status of your book borrow requests below.</p>
+
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th>Book Title</th>
+                    <th>Author</th>
+                    <th>Requested On</th>
+                    <th>Days Requested</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for req in my_requests %}
+                <tr>
+                    <td><strong>{{ req.book.title }}</strong></td>
+                    <td>{{ req.book.author }}</td>
+                    <td>{{ req.request_date.strftime('%d %b %Y, %I:%M %p') }}</td>
+                    <td>{{ req.days_requested }} days</td>
+                    <td>
+                        {% if req.status == 'pending' %}
+                        <span class="badge badge-warning">⏳ Pending</span>
+                        {% elif req.status == 'accepted' %}
+                        <span class="badge badge-success">✅ Accepted</span>
+                        {% elif req.status == 'rejected' %}
+                        <span class="badge" style="background-color: #f8d7da; color: #842029;">❌ Rejected</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" style="text-align: center; padding: 2rem;" class="text-muted">You haven't made any
+                        book requests yet. Browse the catalog above!</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

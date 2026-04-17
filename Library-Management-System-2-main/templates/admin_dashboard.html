@@ -1,0 +1,296 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard - Library Management System{% endblock %}
+
+{% block content %}
+<div class="panel">
+    <h2>Administrative Dashboard</h2>
+    <p class="text-muted">Manage library assets, user accounts, and book assignments from this central hub.</p>
+    
+    <div class="grid-3" style="margin-top: 1.5rem;">
+        <div class="stats-card">
+            <div class="stats-info">
+                <h3>{{ books|length }}</h3>
+                <p>Total Books</p>
+            </div>
+        </div>
+        <div class="stats-card">
+            <div class="stats-info">
+                <h3>{{ users|length }}</h3>
+                <p>Total Users</p>
+            </div>
+        </div>
+        <div class="stats-card">
+            <div class="stats-info">
+                <h3>{{ borrows|selectattr('status', 'equalto', 'borrowed')|list|length }}</h3>
+                <p>Issued Books</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Pending Book Requests Panel -->
+{% if pending_requests %}
+<div class="panel" style="border-left: 4px solid var(--warning);">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+        <h3 style="margin: 0;">📋 Pending Book Requests <span class="badge badge-warning" style="font-size: 0.9rem; margin-left: 0.5rem;">{{ pending_requests|length }}</span></h3>
+    </div>
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th>User</th>
+                    <th>Book Requested</th>
+                    <th>Author</th>
+                    <th>Available Copies</th>
+                    <th>Days Requested</th>
+                    <th>Requested On</th>
+                    <th style="width: 200px;">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for req in pending_requests %}
+                <tr>
+                    <td><strong>{{ req.user.name }}</strong> <br><small style="color: var(--text-muted);">@{{ req.user.username }}</small></td>
+                    <td><strong>{{ req.book.title }}</strong></td>
+                    <td>{{ req.book.author }}</td>
+                    <td>
+                        {% if req.book.available_copies > 0 %}
+                            <span style="color: var(--success); font-weight: 600;">{{ req.book.available_copies }} / {{ req.book.total_copies }}</span>
+                        {% else %}
+                            <span style="color: var(--danger); font-weight: 600;">0 / {{ req.book.total_copies }}</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ req.days_requested }} days</td>
+                    <td>{{ req.request_date.strftime('%d %b %Y, %I:%M %p') }}</td>
+                    <td>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <form method="POST" action="{{ url_for('accept_request', request_id=req.id) }}">
+                                <button type="submit" class="btn btn-success" style="padding: 0.3rem 0.75rem; font-size: 0.8rem;">✅ Accept</button>
+                            </form>
+                            <form method="POST" action="{{ url_for('delete_request', request_id=req.id) }}" onsubmit="return confirm('Reject this request?');">
+                                <button type="submit" class="btn btn-danger" style="padding: 0.3rem 0.75rem; font-size: 0.8rem;">❌ Reject</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<div class="grid-2">
+    <!-- Issue/Assign Book -->
+    <div class="panel">
+        <h3>Issue Book to User</h3>
+        <form method="POST" action="{{ url_for('assign_book') }}">
+            <div class="form-group">
+                <label>Select User</label>
+                <select name="user_id" class="form-control" required>
+                    {% for user in users %}
+                    <option value="{{ user.id }}">{{ user.name }} (@{{ user.username }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Select Book</label>
+                <select name="book_id" class="form-control" required>
+                    {% for book in books if book.available_copies > 0 %}
+                    <option value="{{ book.id }}">{{ book.title }} ({{ book.available_copies }} available)</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Borrowing Duration (Days)</label>
+                <input type="number" name="days" class="form-control" value="14" min="1">
+            </div>
+            <button type="submit" class="btn btn-primary" style="width: 100%;">Assign Book</button>
+        </form>
+    </div>
+
+    <!-- Add New Book -->
+    <div class="panel">
+        <h3>Add New Book to Inventory</h3>
+        <form method="POST" action="{{ url_for('add_book') }}">
+            <div class="form-group">
+                <label>Book Title</label>
+                <input type="text" name="title" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>Author Name</label>
+                <input type="text" name="author" class="form-control" required>
+            </div>
+            <div class="grid-2" style="gap: 1rem;">
+                <div class="form-group">
+                    <label>Category</label>
+                    <input type="text" name="category" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>Total Copies</label>
+                    <input type="number" name="copies" class="form-control" min="1" value="1" required>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-success" style="width: 100%;">Register Book</button>
+        </form>
+    </div>
+</div>
+
+<!-- Manage Users Table -->
+<div class="panel">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+        <h3>Registered Users</h3>
+        <button onclick="document.getElementById('add-user-form').style.display='block'" class="btn btn-primary">+ Add New User</button>
+    </div>
+
+    <div id="add-user-form" class="panel" style="display:none; border-color: var(--primary); background-color: #f0f7ff;">
+        <h4>Register New User</h4>
+        <form method="POST" action="{{ url_for('add_user') }}">
+             <div class="grid-3" style="gap: 1rem;">
+                <div class="form-group">
+                    <label>Full Name</label>
+                    <input type="text" name="name" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" name="username" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" name="password" class="form-control" required>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary">Create User Account</button>
+            <button type="button" onclick="document.getElementById('add-user-form').style.display='none'" class="btn btn-secondary">Cancel</button>
+        </form>
+    </div>
+
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Username</th>
+                    <th style="width: 250px;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr {% if active_filter_id|string == user.id|string %}style="background-color: #f0f7ff; font-weight: bold;"{% endif %}>
+                    <td>#{{ user.id }}</td>
+                    <td>{{ user.name }}</td>
+                    <td>@{{ user.username }}</td>
+                    <td>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <a href="{{ url_for('admin_dashboard', user_filter=user.id) }}" class="btn btn-primary" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; text-decoration: none;">View Issued Books</a>
+                            <form method="POST" action="{{ url_for('delete_user', user_id=user.id) }}" onsubmit="return confirm('Are you sure you want to delete this user?');">
+                                <button type="submit" class="btn btn-danger" style="padding: 0.2rem 0.5rem; font-size: 0.8rem;">Delete</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- History / Issued Books -->
+<div class="panel">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h3>
+            {% if active_filter_id %}
+                Issued Books for: 
+                {% for u in users if u.id|string == active_filter_id|string %}
+                    <span style="color: var(--primary);">{{ u.name }}</span>
+                {% endfor %}
+            {% else %}
+                All Assignment & Return History
+            {% endif %}
+        </h3>
+        {% if active_filter_id %}
+            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary" style="font-size: 0.8rem;">Show All Records</a>
+        {% endif %}
+    </div>
+    
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th>User</th>
+                    <th>Book</th>
+                    <th>Due Date</th>
+                    <th>Status</th>
+                    <th style="width: 150px;">Fine (₹)</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for b in borrows %}
+                <tr>
+                    <td>{{ b.user.name }}</td>
+                    <td>{{ b.book.title }}</td>
+                    <td>{{ b.due_date.strftime('%Y-%m-%d') }}</td>
+                    <td>
+                        {% if b.status == 'borrowed' %}
+                            <span class="badge badge-warning">Active</span>
+                            <form method="POST" action="{{ url_for('return_book', borrow_id=b.id) }}" style="display:inline; margin-left: 10px;">
+                                <button type="submit" class="btn btn-success" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;">Return</button>
+                            </form>
+                        {% else %}
+                            <span class="badge badge-success">Returned</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <form method="POST" action="{{ url_for('add_manual_fine', borrow_id=b.id) }}" style="display: flex; gap: 0.2rem; align-items: center;">
+                            <input type="number" name="fine_amount" value="{{ b.fine_amount }}" class="form-control" style="padding: 0.2rem; font-size: 0.8rem;" min="0">
+                            <button type="submit" class="btn btn-primary" style="padding: 0.2rem 0.4rem; font-size: 0.75rem;">Set</button>
+                        </form>
+                    </td>
+                    <td>
+                        <!-- Extra actions if needed -->
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" style="text-align: center; padding: 2rem;" class="text-muted">No records found for this selection.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Manage Books Table -->
+<div class="panel">
+    <h3>Library Catalog Management</h3>
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Author</th>
+                    <th>Stock</th>
+                    <th style="width: 100px;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for book in books %}
+                <tr>
+                    <td><strong>{{ book.title }}</strong></td>
+                    <td>{{ book.author }}</td>
+                    <td>{{ book.available_copies }} / {{ book.total_copies }}</td>
+                    <td>
+                        <form method="POST" action="{{ url_for('delete_book', book_id=book.id) }}" onsubmit="return confirm('Delete this book?');">
+                            <button type="submit" class="btn btn-danger" style="padding: 0.2rem 0.5rem; font-size: 0.8rem;">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
